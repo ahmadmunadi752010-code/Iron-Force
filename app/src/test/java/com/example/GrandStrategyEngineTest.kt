@@ -88,4 +88,11 @@ class GrandStrategyEngineTest {
 
         assertEquals("GER", state.provinceOwners["warsaw"])
     }
+
+    @Test
+    fun dateFormattingMatches1936Calendar() {
+        assertEquals("1936.01.01 08:00", GrandStrategyEngine.formatDate(TheaterWorldData.EPOCH_DAY_1936_01_01, 8))
+        assertEquals("1936.02.29", GrandStrategyEngine.formatShortDate(TheaterWorldData.EPOCH_DAY_1936_01_01 + 59))
+        assertEquals("1936.03.01", GrandStrategyEngine.formatShortDate(TheaterWorldData.EPOCH_DAY_1936_01_01 + 60))
+    }
 }

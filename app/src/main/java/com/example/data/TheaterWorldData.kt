@@ -2,11 +2,11 @@ package com.example.data
 
 import com.example.model.*
 import com.example.ui.theme.*
-import java.time.LocalDate
 
 object TheaterWorldData {
 
-    val EPOCH_DAY_1936_01_01: Long = LocalDate.of(1936, 1, 1).toEpochDay()
+    // Exact ISO-8601 epoch day for 1936-01-01 (compatible with minSdk 24)
+    const val EPOCH_DAY_1936_01_01: Long = -12419L
 
     val nations: Map<String, NationDef> = listOf(
         NationDef(
