@@ -1,0 +1,131 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated commander profile and lifetime grand strategy campaign stats.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the player."
+        },
+        "commanderName": {
+          "type": "string",
+          "description": "Display name for the commander."
+        },
+        "totalCampaigns": {
+          "type": "integer",
+          "description": "Total number of campaigns started."
+        },
+        "victories": {
+          "type": "integer",
+          "description": "Total number of victorious campaigns."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "commanderName", "totalCampaigns", "victories", "createdAt", "updatedAt"]
+    },
+    "CampaignSave": {
+      "title": "CampaignSave",
+      "description": "Full grand strategy campaign state snapshot for a player.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "campaignName": { "type": "string" },
+        "playerNationId": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["RECRUIT", "REGULAR", "VETERAN"] },
+        "gameDateEpochDay": { "type": "integer" },
+        "gameHour": { "type": "integer" },
+        "politicalPower": { "type": "number" },
+        "stability": { "type": "number" },
+        "warSupport": { "type": "number" },
+        "manpower": { "type": "integer" },
+        "commandPower": { "type": "number" },
+        "worldTension": { "type": "number" },
+        "conscriptionLaw": { "type": "string" },
+        "economyLaw": { "type": "string" },
+        "tradeLaw": { "type": "string" },
+        "activeFocusId": { "type": "string" },
+        "activeFocusProgressDays": { "type": "integer" },
+        "completedFocusIds": { "type": "array" },
+        "activeResearchId": { "type": "string" },
+        "activeResearchProgressDays": { "type": "integer" },
+        "unlockedTechIds": { "type": "array" },
+        "provinceOwners": { "type": "object" },
+        "provinceCivFactories": { "type": "object" },
+        "provinceMilFactories": { "type": "object" },
+        "provinceForts": { "type": "object" },
+        "provinceInfra": { "type": "object" },
+        "equipmentStockpile": { "type": "object" },
+        "diplomacyStates": { "type": "object" },
+        "nationRelations": { "type": "object" },
+        "warGoalProgress": { "type": "object" },
+        "divisionsData": { "type": "array" },
+        "productionLinesData": { "type": "array" },
+        "constructionQueueData": { "type": "array" },
+        "trainingQueueData": { "type": "array" },
+        "status": { "type": "string", "enum": ["active", "victory", "defeat"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId",
+        "campaignName",
+        "playerNationId",
+        "difficulty",
+        "gameDateEpochDay",
+        "gameHour",
+        "politicalPower",
+        "stability",
+        "warSupport",
+        "manpower",
+        "commandPower",
+        "worldTension",
+        "conscriptionLaw",
+        "economyLaw",
+        "tradeLaw",
+        "activeFocusId",
+        "activeFocusProgressDays",
+        "completedFocusIds",
+        "activeResearchId",
+        "activeResearchProgressDays",
+        "unlockedTechIds",
+        "provinceOwners",
+        "provinceCivFactories",
+        "provinceMilFactories",
+        "provinceForts",
+        "provinceInfra",
+        "equipmentStockpile",
+        "diplomacyStates",
+        "nationRelations",
+        "warGoalProgress",
+        "divisionsData",
+        "productionLinesData",
+        "constructionQueueData",
+        "trainingQueueData",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Player profile document scoped strictly to the authenticated UID."
+    },
+    "/users/{userId}/campaigns/{campaignId}": {
+      "schema": { "$ref": "#/entities/CampaignSave" },
+      "description": "Cloud-saved grand strategy campaigns owned by the user."
+    }
+  }
+}

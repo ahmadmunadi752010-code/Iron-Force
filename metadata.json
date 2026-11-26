@@ -1,0 +1,6 @@
+{
+  "name": "Iron Front",
+  "description": "Grand strategy WWII-inspired theater wargame with interactive frontline map, national focus trees, industrial production, research, division templates, and diplomacy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

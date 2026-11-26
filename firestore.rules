@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.commanderName is string && data.commanderName.size() >= 1 && data.commanderName.size() <= 60 &&
+             data.totalCampaigns is int && data.totalCampaigns >= 0 && data.totalCampaigns <= 10000 &&
+             data.victories is int && data.victories >= 0 && data.victories <= 10000;
+    }
+
+    function isValidCampaign(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.campaignName is string && data.campaignName.size() >= 1 && data.campaignName.size() <= 60 &&
+             data.playerNationId is string && data.playerNationId.size() >= 2 && data.playerNationId.size() <= 16 &&
+             data.difficulty in ['RECRUIT', 'REGULAR', 'VETERAN'] &&
+             data.gameDateEpochDay is int && data.gameDateEpochDay >= -30000 && data.gameDateEpochDay <= 100000 &&
+             data.gameHour is int && data.gameHour >= 0 && data.gameHour <= 23 &&
+             data.politicalPower is number && data.politicalPower >= -500 && data.politicalPower <= 50000 &&
+             data.stability is number && data.stability >= 0.0 && data.stability <= 1.0 &&
+             data.warSupport is number && data.warSupport >= 0.0 && data.warSupport <= 1.0 &&
+             data.manpower is int && data.manpower >= 0 && data.manpower <= 200000000 &&
+             data.commandPower is number && data.commandPower >= 0.0 && data.commandPower <= 5000.0 &&
+             data.worldTension is number && data.worldTension >= 0.0 && data.worldTension <= 1.0 &&
+             data.conscriptionLaw is string && data.conscriptionLaw.size() >= 1 && data.conscriptionLaw.size() <= 40 &&
+             data.economyLaw is string && data.economyLaw.size() >= 1 && data.economyLaw.size() <= 40 &&
+             data.tradeLaw is string && data.tradeLaw.size() >= 1 && data.tradeLaw.size() <= 40 &&
+             data.activeFocusId is string && data.activeFocusId.size() <= 64 &&
+             data.activeFocusProgressDays is int && data.activeFocusProgressDays >= 0 && data.activeFocusProgressDays <= 365 &&
+             data.completedFocusIds is list && data.completedFocusIds.size() <= 100 &&
+             (data.completedFocusIds.size() == 0 || data.completedFocusIds[0] is string) &&
+             data.activeResearchId is string && data.activeResearchId.size() <= 64 &&
+             data.activeResearchProgressDays is int && data.activeResearchProgressDays >= 0 && data.activeResearchProgressDays <= 500 &&
+             data.unlockedTechIds is list && data.unlockedTechIds.size() <= 100 &&
+             (data.unlockedTechIds.size() == 0 || data.unlockedTechIds[0] is string) &&
+             data.provinceOwners is map && data.provinceOwners.size() <= 60 &&
+             data.provinceCivFactories is map && data.provinceCivFactories.size() <= 60 &&
+             data.provinceMilFactories is map && data.provinceMilFactories.size() <= 60 &&
+             data.provinceForts is map && data.provinceForts.size() <= 60 &&
+             data.provinceInfra is map && data.provinceInfra.size() <= 60 &&
+             data.equipmentStockpile is map && data.equipmentStockpile.size() <= 20 &&
+             data.diplomacyStates is map && data.diplomacyStates.size() <= 20 &&
+             data.nationRelations is map && data.nationRelations.size() <= 20 &&
+             data.warGoalProgress is map && data.warGoalProgress.size() <= 20 &&
+             data.divisionsData is list && data.divisionsData.size() <= 150 &&
+             data.productionLinesData is list && data.productionLinesData.size() <= 20 &&
+             data.constructionQueueData is list && data.constructionQueueData.size() <= 30 &&
+             data.trainingQueueData is list && data.trainingQueueData.size() <= 20 &&
+             data.status in ['active', 'victory', 'defeat'];
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'commanderName', 'totalCampaigns', 'victories', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'commanderName', 'totalCampaigns', 'victories', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidUserProfile(incoming()) &&
+                       isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['commanderName', 'totalCampaigns', 'victories', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /campaigns/{campaignId} {
+        allow get, delete: if isOwner(userId) && isValidId(campaignId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(campaignId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().status == 'active' &&
+                         incoming().keys().hasAll([
+                           'userId', 'campaignName', 'playerNationId', 'difficulty',
+                           'gameDateEpochDay', 'gameHour', 'politicalPower', 'stability',
+                           'warSupport', 'manpower', 'commandPower', 'worldTension',
+                           'conscriptionLaw', 'economyLaw', 'tradeLaw', 'activeFocusId',
+                           'activeFocusProgressDays', 'completedFocusIds', 'activeResearchId',
+                           'activeResearchProgressDays', 'unlockedTechIds', 'provinceOwners',
+                           'provinceCivFactories', 'provinceMilFactories', 'provinceForts',
+                           'provinceInfra', 'equipmentStockpile', 'diplomacyStates',
+                           'nationRelations', 'warGoalProgress', 'divisionsData',
+                           'productionLinesData', 'constructionQueueData', 'trainingQueueData',
+                           'status', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'campaignName', 'playerNationId', 'difficulty',
+                           'gameDateEpochDay', 'gameHour', 'politicalPower', 'stability',
+                           'warSupport', 'manpower', 'commandPower', 'worldTension',
+                           'conscriptionLaw', 'economyLaw', 'tradeLaw', 'activeFocusId',
+                           'activeFocusProgressDays', 'completedFocusIds', 'activeResearchId',
+                           'activeResearchProgressDays', 'unlockedTechIds', 'provinceOwners',
+                           'provinceCivFactories', 'provinceMilFactories', 'provinceForts',
+                           'provinceInfra', 'equipmentStockpile', 'diplomacyStates',
+                           'nationRelations', 'warGoalProgress', 'divisionsData',
+                           'productionLinesData', 'constructionQueueData', 'trainingQueueData',
+                           'status', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidCampaign(incoming());
+
+        allow update: if isSignedIn() &&
+                         isValidCampaign(incoming()) &&
+                         isOwner(userId) &&
+                         isValidId(campaignId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         existing().status == 'active' &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'campaignName', 'gameDateEpochDay', 'gameHour',
+                           'politicalPower', 'stability', 'warSupport', 'manpower',
+                           'commandPower', 'worldTension', 'conscriptionLaw', 'economyLaw',
+                           'tradeLaw', 'activeFocusId', 'activeFocusProgressDays',
+                           'completedFocusIds', 'activeResearchId', 'activeResearchProgressDays',
+                           'unlockedTechIds', 'provinceOwners', 'provinceCivFactories',
+                           'provinceMilFactories', 'provinceForts', 'provinceInfra',
+                           'equipmentStockpile', 'diplomacyStates', 'nationRelations',
+                           'warGoalProgress', 'divisionsData', 'productionLinesData',
+                           'constructionQueueData', 'trainingQueueData', 'status', 'updatedAt'
+                         ]);
+      }
+    }
+  }
+}
