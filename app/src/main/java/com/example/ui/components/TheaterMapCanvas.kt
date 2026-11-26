@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,21 +25,25 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.TheaterWorldData
 import com.example.model.*
 import com.example.ui.theme.*
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
+
+private const val WORLD_ASPECT_RATIO = 1.85f
 
 @Composable
 fun TheaterMapCanvas(
@@ -51,9 +55,68 @@ fun TheaterMapCanvas(
     onMapModeSelected: (MapMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var scale by remember { mutableFloatStateOf(1.15f) }
+    val capitalId = TheaterWorldData.nations[campaign.playerNationId]?.capitalProvinceId
+    val capitalProv = TheaterWorldData.provinceMap[capitalId]
+
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var scale by remember { mutableFloatStateOf(1.35f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
+    var didInitialFocus by remember(campaign.campaignId, campaign.playerNationId) { mutableStateOf(false) }
+
     val textMeasurer = rememberTextMeasurer()
+
+    fun worldDims(w: Float, h: Float): Pair<Float, Float> {
+        val baseH = minOf(h * 0.78f, w * 0.96f).coerceAtLeast(1f)
+        val baseW = baseH * WORLD_ASPECT_RATIO
+        return baseW to baseH
+    }
+
+    fun clampPan(raw: Offset, curScale: Float, w: Float, h: Float): Offset {
+        if (w <= 0f || h <= 0f) return raw
+        val (baseW, baseH) = worldDims(w, h)
+        val maxPanX = maxOf(w * 0.45f, baseW * 0.56f * curScale)
+        val maxPanY = maxOf(h * 0.45f, baseH * 0.56f * curScale)
+        return Offset(
+            x = raw.x.coerceIn(-maxPanX, maxPanX),
+            y = raw.y.coerceIn(-maxPanY, maxPanY)
+        )
+    }
+
+    fun focusOnCapital(targetScale: Float = 1.45f) {
+        if (canvasSize.width <= 0 || canvasSize.height <= 0) return
+        val w = canvasSize.width.toFloat()
+        val h = canvasSize.height.toFloat()
+        val (baseW, baseH) = worldDims(w, h)
+        val tx = capitalProv?.centerX ?: 0.5f
+        val ty = capitalProv?.centerY ?: 0.38f
+        scale = targetScale
+        panOffset = clampPan(
+            Offset(
+                x = -(tx - 0.5f) * baseW * targetScale,
+                y = -(ty - 0.5f) * baseH * targetScale
+            ),
+            targetScale,
+            w,
+            h
+        )
+    }
+
+    fun fitWorldOverview() {
+        if (canvasSize.width <= 0 || canvasSize.height <= 0) return
+        val w = canvasSize.width.toFloat()
+        val h = canvasSize.height.toFloat()
+        val (baseW, _) = worldDims(w, h)
+        val fitScale = ((w * 0.95f) / baseW).coerceIn(0.48f, 1.0f)
+        scale = fitScale
+        panOffset = Offset.Zero
+    }
+
+    LaunchedEffect(canvasSize, campaign.campaignId, campaign.playerNationId) {
+        if (!didInitialFocus && canvasSize.width > 0 && canvasSize.height > 0) {
+            focusOnCapital(targetScale = 1.40f)
+            didInitialFocus = true
+        }
+    }
 
     val validMoveTargets = remember(orderingMoveFromId, campaign.provinceOwners, campaign.diplomacyStates) {
         if (orderingMoveFromId == null) emptySet()
@@ -72,45 +135,56 @@ fun TheaterMapCanvas(
         modifier = modifier
             .fillMaxSize()
             .background(OceanDeep)
+            .onSizeChanged { canvasSize = it }
     ) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
-                        val nextScale = (scale * zoom).coerceIn(0.85f, 3.2f)
+                        val w = size.width.toFloat()
+                        val h = size.height.toFloat()
+                        val nextScale = (scale * zoom).coerceIn(0.45f, 4.5f)
                         scale = nextScale
-                        val maxPanX = size.width * 0.55f * nextScale
-                        val maxPanY = size.height * 0.55f * nextScale
-                        panOffset = Offset(
-                            x = (panOffset.x + pan.x).coerceIn(-maxPanX, maxPanX),
-                            y = (panOffset.y + pan.y).coerceIn(-maxPanY, maxPanY)
-                        )
+                        panOffset = clampPan(panOffset + pan, nextScale, w, h)
                     }
                 }
-                .pointerInput(scale, panOffset) {
+                .pointerInput(Unit) {
                     detectTapGestures { tap ->
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
-                        val mapSide = minOf(w, h * 1.15f).coerceAtLeast(1f)
-                        val originX = (w - mapSide) / 2f
-                        val originY = (h - mapSide) / 2f
+                        val (baseW, baseH) = worldDims(w, h)
+                        val originX = (w - baseW) / 2f
+                        val originY = (h - baseH) / 2f
 
-                        // Invert transform: screen = center + (world - center) * scale + panOffset
                         val cx = w / 2f
                         val cy = h / 2f
                         val worldX = (tap.x - cx - panOffset.x) / scale + cx
                         val worldY = (tap.y - cy - panOffset.y) / scale + cy
-                        val normX = (worldX - originX) / mapSide
-                        val normY = (worldY - originY) / mapSide
+                        val normX = (worldX - originX) / baseW
+                        val normY = (worldY - originY) / baseH
 
-                        val hit = TheaterWorldData.provinces.minByOrNull { prov ->
-                            hypot((prov.centerX - normX).toDouble(), (prov.centerY - normY).toDouble())
+                        val polyHit = TheaterWorldData.provinces.firstOrNull { prov ->
+                            pointInPolygon(normX, normY, prov.polygon)
                         }
-                        if (hit != null) {
-                            val dist = hypot((hit.centerX - normX).toDouble(), (hit.centerY - normY).toDouble())
+                        if (polyHit != null) {
+                            onProvinceTapped(polyHit.id)
+                            return@detectTapGestures
+                        }
+
+                        val nearest = TheaterWorldData.provinces.minByOrNull { prov ->
+                            hypot(
+                                ((prov.centerX - normX) * WORLD_ASPECT_RATIO).toDouble(),
+                                (prov.centerY - normY).toDouble()
+                            )
+                        }
+                        if (nearest != null) {
+                            val dist = hypot(
+                                ((nearest.centerX - normX) * WORLD_ASPECT_RATIO).toDouble(),
+                                (nearest.centerY - normY).toDouble()
+                            )
                             if (dist < 0.12) {
-                                onProvinceTapped(hit.id)
+                                onProvinceTapped(nearest.id)
                             }
                         }
                     }
@@ -119,34 +193,81 @@ fun TheaterMapCanvas(
         ) {
             val w = size.width
             val h = size.height
-            val mapSide = minOf(w, h * 1.15f)
-            val originX = (w - mapSide) / 2f
-            val originY = (h - mapSide) / 2f
+            val (baseW, baseH) = worldDims(w, h)
+            val originX = (w - baseW) / 2f
+            val originY = (h - baseH) / 2f
             val cx = w / 2f
             val cy = h / 2f
 
             fun toScreen(nx: Float, ny: Float): Offset {
-                val wx = originX + nx * mapSide
-                val wy = originY + ny * mapSide
+                val wx = originX + nx * baseW
+                val wy = originY + ny * baseH
                 return Offset(
                     x = cx + (wx - cx) * scale + panOffset.x,
                     y = cy + (wy - cy) * scale + panOffset.y
                 )
             }
 
-            // 1. Cartographic Latitude / Longitude Graticule Lines
-            val gridColor = OceanCoastal.copy(alpha = 0.7f)
-            for (i in 0..10) {
-                val t = i / 10f
-                val pStartH = toScreen(0f, t)
-                val pEndH = toScreen(1f, t)
-                drawLine(gridColor, pStartH, pEndH, strokeWidth = 1f)
-                val pStartV = toScreen(t, 0f)
-                val pEndV = toScreen(t, 1f)
-                drawLine(gridColor, pStartV, pEndV, strokeWidth = 1f)
+            // 1. Cartographic World Latitude / Longitude Graticule Lines
+            val gridColor = OceanCoastal.copy(alpha = 0.65f)
+            for (i in 0..12) {
+                val tx = i / 12f
+                drawLine(gridColor, toScreen(tx, 0f), toScreen(tx, 1f), strokeWidth = 1f)
+            }
+            for (j in 0..6) {
+                val ty = j / 6f
+                drawLine(gridColor, toScreen(0f, ty), toScreen(1f, ty), strokeWidth = 1f)
+            }
+            // Subtle Equator dashed guide
+            drawLine(
+                color = BrassGold.copy(alpha = 0.18f),
+                start = toScreen(0f, 0.59f),
+                end = toScreen(1f, 0.59f),
+                strokeWidth = 1.2f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f))
+            )
+
+            // 2. Stylized World Continent Landmasses Backdrop
+            for (continent in TheaterWorldData.continentSilhouettes) {
+                val landPath = Path().apply {
+                    continent.forEachIndexed { idx, pt ->
+                        val sPt = toScreen(pt.x, pt.y)
+                        if (idx == 0) moveTo(sPt.x, sPt.y) else lineTo(sPt.x, sPt.y)
+                    }
+                    close()
+                }
+                drawPath(path = landPath, color = WorldLandBase)
+                drawPath(
+                    path = landPath,
+                    color = OliveSteel.copy(alpha = 0.45f),
+                    style = Stroke(width = 1.6f * scale.coerceAtMost(1.5f), join = StrokeJoin.Round)
+                )
             }
 
-            // 2. Adjacency & Supply Network Links
+            // Subtle Ocean & Region Cartographic Labels
+            val regionMarks = listOf(
+                Triple("PACIFIC", 0.08f, 0.66f),
+                Triple("ATLANTIC", 0.36f, 0.46f),
+                Triple("INDIAN OCEAN", 0.72f, 0.72f)
+            )
+            for ((label, rx, ry) in regionMarks) {
+                val pos = toScreen(rx, ry)
+                val layout = textMeasurer.measure(
+                    text = label,
+                    style = TextStyle(
+                        color = ParchmentText.copy(alpha = 0.16f),
+                        fontSize = (10f * scale.coerceIn(0.7f, 1.3f)).sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 2.sp
+                    )
+                )
+                drawText(
+                    textLayoutResult = layout,
+                    topLeft = Offset(pos.x - layout.size.width / 2f, pos.y - layout.size.height / 2f)
+                )
+            }
+
+            // 3. Adjacency & Global Sea/Supply Links (with clean trans-Pacific edge wrapping)
             val drawnLinks = HashSet<String>()
             for (prov in TheaterWorldData.provinces) {
                 val pA = toScreen(prov.centerX, prov.centerY)
@@ -154,26 +275,40 @@ fun TheaterMapCanvas(
                     val key = if (prov.id < nId) "${prov.id}-$nId" else "$nId-${prov.id}"
                     if (drawnLinks.add(key)) {
                         val nb = TheaterWorldData.provinceMap[nId] ?: continue
-                        val pB = toScreen(nb.centerX, nb.centerY)
                         val sameOwner = campaign.provinceOwners[prov.id] == campaign.provinceOwners[nId]
-                        drawLine(
-                            color = if (sameOwner) ParchmentText.copy(alpha = 0.18f) else FrontlineCrimson.copy(alpha = 0.35f),
-                            start = pA,
-                            end = pB,
-                            strokeWidth = if (sameOwner) 1.5f * scale else 2.2f * scale,
-                            pathEffect = if (sameOwner) null else PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
-                        )
+                        val linkColor = if (sameOwner) ParchmentText.copy(alpha = 0.18f) else FrontlineCrimson.copy(alpha = 0.36f)
+                        val strokeW = if (sameOwner) 1.3f * scale.coerceAtMost(1.5f) else 2.0f * scale.coerceAtMost(1.6f)
+                        val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
+
+                        if (abs(nb.centerX - prov.centerX) > 0.60f) {
+                            // Trans-Pacific wrap-around edge stubs (instead of slashing across continents)
+                            val aToWest = prov.centerX < 0.5f
+                            val edgeA = toScreen(if (aToWest) 0.0f else 1.0f, (prov.centerY + nb.centerY) / 2f)
+                            val edgeB = toScreen(if (aToWest) 1.0f else 0.0f, (prov.centerY + nb.centerY) / 2f)
+                            val pB = toScreen(nb.centerX, nb.centerY)
+                            drawLine(linkColor, pA, edgeA, strokeWidth = strokeW, pathEffect = dash)
+                            drawLine(linkColor, pB, edgeB, strokeWidth = strokeW, pathEffect = dash)
+                        } else {
+                            val pB = toScreen(nb.centerX, nb.centerY)
+                            drawLine(
+                                color = linkColor,
+                                start = pA,
+                                end = pB,
+                                strokeWidth = strokeW,
+                                pathEffect = if (sameOwner) null else dash
+                            )
+                        }
                     }
                 }
             }
 
-            // 3. Province Polygons
+            // 4. Province Polygons
             for (prov in TheaterWorldData.provinces) {
                 val ownerId = campaign.provinceOwners[prov.id] ?: prov.initialOwnerId
                 val fillColor = when (mapMode) {
                     MapMode.POLITICAL -> {
                         val base = TheaterWorldData.nations[ownerId]?.color ?: NationMinorColor
-                        base.copy(alpha = 0.86f)
+                        base.copy(alpha = 0.88f)
                     }
                     MapMode.TERRAIN_SUPPLY -> {
                         Color(prov.terrain.mapTint).copy(alpha = 0.88f)
@@ -204,12 +339,12 @@ fun TheaterMapCanvas(
                 val borderCol = when {
                     isSelected -> BrassGold
                     isMoveTarget -> VictoryEmerald
-                    else -> WarRoomObsidian.copy(alpha = 0.85f)
+                    else -> WarRoomObsidian.copy(alpha = 0.88f)
                 }
                 val borderWidth = when {
-                    isSelected -> 3.2f * scale
-                    isMoveTarget -> 2.8f * scale
-                    else -> 1.3f * scale
+                    isSelected -> 2.8f * scale.coerceAtMost(1.8f)
+                    isMoveTarget -> 2.4f * scale.coerceAtMost(1.8f)
+                    else -> 1.1f * scale.coerceAtMost(1.5f)
                 }
                 drawPath(
                     path = path,
@@ -218,38 +353,40 @@ fun TheaterMapCanvas(
                 )
             }
 
-            // 4. Capital Stars, City Dots & Labels
+            // 5. Capital Stars, City Dots, Forts & Labels
             for (prov in TheaterWorldData.provinces) {
                 val center = toScreen(prov.centerX, prov.centerY)
                 val forts = campaign.provinceForts[prov.id] ?: 0
+                val markerScale = scale.coerceIn(0.7f, 1.5f)
                 if (prov.isCapital) {
                     drawCircle(
                         color = BrassGold,
-                        radius = 4.5f * scale,
-                        center = center + Offset(0f, -10f * scale)
+                        radius = 3.8f * markerScale,
+                        center = center + Offset(0f, -8f * markerScale)
                     )
-                } else if (prov.victoryPoints >= 6) {
+                } else if (prov.victoryPoints >= 7) {
                     drawCircle(
                         color = ParchmentText.copy(alpha = 0.8f),
-                        radius = 2.5f * scale,
-                        center = center + Offset(0f, -9f * scale)
+                        radius = 2.2f * markerScale,
+                        center = center + Offset(0f, -7.5f * markerScale)
                     )
                 }
-                if (forts > 0) {
+                if (forts > 0 && scale >= 0.8f) {
                     drawRect(
                         color = AmberSupply,
-                        topLeft = center + Offset(-16f * scale, -14f * scale),
-                        size = Size(5f * scale, 5f * scale)
+                        topLeft = center + Offset(-13f * markerScale, -11f * markerScale),
+                        size = Size(4.2f * markerScale, 4.2f * markerScale)
                     )
                 }
 
-                // Draw province name when readable
-                if (scale >= 1.0f) {
+                // Show all labels when zoomed in; show only capitals in World Overview to avoid clutter
+                val showLabel = scale >= 1.05f || (prov.isCapital && scale >= 0.55f)
+                if (showLabel) {
                     val labelLayout = textMeasurer.measure(
                         text = prov.name,
                         style = TextStyle(
-                            color = ParchmentText.copy(alpha = 0.92f),
-                            fontSize = (8.5f * scale.coerceAtMost(1.45f)).sp,
+                            color = if (prov.isCapital) BrassGold.copy(alpha = 0.96f) else ParchmentText.copy(alpha = 0.90f),
+                            fontSize = (7.2f * scale.coerceIn(0.85f, 1.35f)).sp,
                             fontWeight = if (prov.isCapital) FontWeight.Bold else FontWeight.Medium
                         )
                     )
@@ -257,27 +394,34 @@ fun TheaterMapCanvas(
                         textLayoutResult = labelLayout,
                         topLeft = Offset(
                             x = center.x - labelLayout.size.width / 2f,
-                            y = center.y + 11f * scale
+                            y = center.y + 9f * markerScale
                         )
                     )
                 }
             }
 
-            // 5. Movement / Attack Arrows
+            // 6. Movement / Attack Arrows
             val movingDivs = campaign.divisions.filter { it.targetProvinceId.isNotBlank() }
             val groupedArrows = movingDivs.groupBy { it.provinceId to it.targetProvinceId }
             for ((edge, divs) in groupedArrows) {
                 val fromProv = TheaterWorldData.provinceMap[edge.first] ?: continue
                 val toProv = TheaterWorldData.provinceMap[edge.second] ?: continue
-                val start = toScreen(fromProv.centerX, fromProv.centerY)
-                val end = toScreen(toProv.centerX, toProv.centerY)
                 val isAttack = campaign.provinceOwners[edge.second] != divs.first().nationId
                 val arrowColor = if (isAttack) FrontlineCrimson else VictoryEmerald
-                drawTacticalArrow(start, end, arrowColor, scale)
+                val start = toScreen(fromProv.centerX, fromProv.centerY)
+                if (abs(toProv.centerX - fromProv.centerX) > 0.60f) {
+                    val goWest = fromProv.centerX < 0.5f
+                    val edgeExit = toScreen(if (goWest) 0.01f else 0.99f, (fromProv.centerY + toProv.centerY) / 2f)
+                    drawTacticalArrow(start, edgeExit, arrowColor, scale)
+                } else {
+                    val end = toScreen(toProv.centerX, toProv.centerY)
+                    drawTacticalArrow(start, end, arrowColor, scale)
+                }
             }
 
-            // 6. NATO-Style Division Counters
+            // 7. NATO-Style Division Counters
             val divsByProvince = campaign.divisions.groupBy { it.provinceId }
+            val counterScale = scale.coerceIn(0.65f, 1.45f)
             for ((provId, stack) in divsByProvince) {
                 val prov = TheaterWorldData.provinceMap[provId] ?: continue
                 val center = toScreen(prov.centerX, prov.centerY)
@@ -287,67 +431,64 @@ fun TheaterMapCanvas(
                 val avgOrg = stack.map { it.org / it.template.maxOrg }.average().toFloat().coerceIn(0f, 1f)
                 val hasArmor = stack.any { it.template == DivisionTemplate.ARMOR }
 
-                val boxW = 24f * scale.coerceAtMost(1.5f)
-                val boxH = 14f * scale.coerceAtMost(1.5f)
+                val boxW = 21f * counterScale
+                val boxH = 12.5f * counterScale
                 val topLeft = Offset(center.x - boxW / 2f, center.y - boxH / 2f)
 
-                // Counter body
                 drawRect(color = WarRoomObsidian.copy(alpha = 0.92f), topLeft = topLeft, size = Size(boxW, boxH))
                 drawRect(
                     color = badgeColor,
                     topLeft = topLeft + Offset(1f, 1f),
-                    size = Size(boxW - 2f, boxH - 4f)
+                    size = Size(boxW - 2f, boxH - 3.5f)
                 )
                 drawRect(
                     color = if (ownerNation == campaign.playerNationId) BrassGold else ParchmentText.copy(alpha = 0.65f),
                     topLeft = topLeft,
                     size = Size(boxW, boxH),
-                    style = Stroke(width = 1.4f)
+                    style = Stroke(width = 1.3f)
                 )
 
-                // NATO symbol inside counter (X for infantry, oval for armor)
                 if (hasArmor) {
                     drawOval(
                         color = ParchmentText,
-                        topLeft = topLeft + Offset(boxW * 0.25f, 3f),
-                        size = Size(boxW * 0.5f, boxH - 8f),
-                        style = Stroke(width = 1.3f)
+                        topLeft = topLeft + Offset(boxW * 0.25f, 2.5f),
+                        size = Size(boxW * 0.5f, (boxH - 7f).coerceAtLeast(2f)),
+                        style = Stroke(width = 1.2f)
                     )
                 } else {
                     drawLine(
                         color = ParchmentText,
-                        start = topLeft + Offset(3f, 2f),
-                        end = topLeft + Offset(boxW - 3f, boxH - 5f),
-                        strokeWidth = 1.2f
+                        start = topLeft + Offset(2.5f, 2f),
+                        end = topLeft + Offset(boxW - 2.5f, boxH - 4.5f),
+                        strokeWidth = 1.1f
                     )
                     drawLine(
                         color = ParchmentText,
-                        start = topLeft + Offset(boxW - 3f, 2f),
-                        end = topLeft + Offset(3f, boxH - 5f),
-                        strokeWidth = 1.2f
+                        start = topLeft + Offset(boxW - 2.5f, 2f),
+                        end = topLeft + Offset(2.5f, boxH - 4.5f),
+                        strokeWidth = 1.1f
                     )
                 }
 
-                // HP (green) & ORG (orange) micro-bars at bottom of counter
+                // HP (green) & ORG (orange) micro-bars
                 drawRect(
                     color = VictoryEmerald,
-                    topLeft = topLeft + Offset(1f, boxH - 3.5f),
-                    size = Size((boxW - 2f) * avgHp.coerceIn(0.1f, 1f), 1.6f)
+                    topLeft = topLeft + Offset(1f, boxH - 3.2f),
+                    size = Size((boxW - 2f) * avgHp.coerceIn(0.1f, 1f), 1.4f)
                 )
                 drawRect(
                     color = AmberSupply,
-                    topLeft = topLeft + Offset(1f, boxH - 1.8f),
-                    size = Size((boxW - 2f) * avgOrg.coerceIn(0.05f, 1f), 1.5f)
+                    topLeft = topLeft + Offset(1f, boxH - 1.6f),
+                    size = Size((boxW - 2f) * avgOrg.coerceIn(0.05f, 1f), 1.3f)
                 )
 
-                // Division count pill
                 val countText = textMeasurer.measure(
                     text = "${stack.size}",
-                    style = TextStyle(color = ParchmentText, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    style = TextStyle(color = ParchmentText, fontSize = 7.5.sp, fontWeight = FontWeight.Bold)
                 )
                 drawCircle(
                     color = WarRoomObsidian,
-                    radius = 6.5f,
+                    radius = 5.8f,
                     center = topLeft + Offset(boxW, 0f)
                 )
                 drawText(
@@ -356,21 +497,21 @@ fun TheaterMapCanvas(
                 )
             }
 
-            // 7. Active Frontline Combat Bubbles
+            // 8. Active Frontline Combat Bubbles
             for (bubble in campaign.combatBubbles) {
                 val prov = TheaterWorldData.provinceMap[bubble.provinceId] ?: continue
-                val center = toScreen(prov.centerX, prov.centerY) + Offset(0f, -18f * scale)
+                val center = toScreen(prov.centerX, prov.centerY) + Offset(0f, -15f * counterScale)
                 val isWinning = if (bubble.attackerNationId == campaign.playerNationId) {
                     bubble.attackerAdvantagePct >= 50
                 } else {
                     bubble.attackerAdvantagePct < 50
                 }
                 val bubbleColor = if (isWinning) VictoryEmerald else FrontlineCrimson
-                drawCircle(color = WarRoomObsidian, radius = 12f, center = center)
-                drawCircle(color = bubbleColor, radius = 10.5f, center = center)
+                drawCircle(color = WarRoomObsidian, radius = 11f, center = center)
+                drawCircle(color = bubbleColor, radius = 9.5f, center = center)
                 val pctLayout = textMeasurer.measure(
                     text = "${bubble.attackerAdvantagePct}%",
-                    style = TextStyle(color = ParchmentText, fontSize = 7.5.sp, fontWeight = FontWeight.Bold)
+                    style = TextStyle(color = ParchmentText, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                 )
                 drawText(
                     textLayoutResult = pctLayout,
@@ -379,7 +520,7 @@ fun TheaterMapCanvas(
             }
         }
 
-        // Top-right Map Mode Switcher & Zoom Reset
+        // Top-right Map Mode Switcher & Camera Controls
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -415,24 +556,54 @@ fun TheaterMapCanvas(
                 }
             }
 
-            FilledTonalIconButton(
-                onClick = {
-                    scale = 1.15f
-                    panOffset = Offset.Zero
-                },
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag("reset_map_zoom_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CenterFocusStrong,
-                    contentDescription = "Reset map camera",
-                    tint = BrassGold,
-                    modifier = Modifier.size(18.dp)
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilledTonalIconButton(
+                    onClick = { fitWorldOverview() },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("world_overview_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = "World map overview",
+                        tint = BrassGold,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                FilledTonalIconButton(
+                    onClick = { focusOnCapital(targetScale = 1.45f) },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("reset_map_zoom_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CenterFocusStrong,
+                        contentDescription = "Center on capital",
+                        tint = BrassGold,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }
+}
+
+private fun pointInPolygon(x: Float, y: Float, poly: List<MapPoint>): Boolean {
+    if (poly.size < 3) return false
+    var inside = false
+    var j = poly.size - 1
+    for (i in poly.indices) {
+        val xi = poly[i].x
+        val yi = poly[i].y
+        val xj = poly[j].x
+        val yj = poly[j].y
+        val intersects = ((yi > y) != (yj > y)) &&
+            (x < (xj - xi) * (y - yi) / ((yj - yi).takeIf { abs(it) > 1e-6f } ?: 1e-6f) + xi)
+        if (intersects) inside = !inside
+        j = i
+    }
+    return inside
 }
 
 private fun DrawScope.drawTacticalArrow(
@@ -455,10 +626,10 @@ private fun DrawScope.drawTacticalArrow(
         color = color.copy(alpha = 0.9f),
         start = start,
         end = shortenedEnd,
-        strokeWidth = 3.2f * scale.coerceAtMost(1.5f),
+        strokeWidth = 3.0f * scale.coerceIn(0.75f, 1.5f),
         cap = StrokeCap.Round
     )
-    val headLen = 9f * scale.coerceAtMost(1.4f)
+    val headLen = 8.5f * scale.coerceIn(0.75f, 1.4f)
     val leftWing = Offset(
         x = shortenedEnd.x - headLen * cos(angle - 0.55f),
         y = shortenedEnd.y - headLen * sin(angle - 0.55f)
@@ -467,6 +638,6 @@ private fun DrawScope.drawTacticalArrow(
         x = shortenedEnd.x - headLen * cos(angle + 0.55f),
         y = shortenedEnd.y - headLen * sin(angle + 0.55f)
     )
-    drawLine(color, shortenedEnd, leftWing, strokeWidth = 2.6f, cap = StrokeCap.Round)
-    drawLine(color, shortenedEnd, rightWing, strokeWidth = 2.6f, cap = StrokeCap.Round)
+    drawLine(color, shortenedEnd, leftWing, strokeWidth = 2.4f, cap = StrokeCap.Round)
+    drawLine(color, shortenedEnd, rightWing, strokeWidth = 2.4f, cap = StrokeCap.Round)
 }

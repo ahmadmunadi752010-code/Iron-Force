@@ -25,7 +25,7 @@ enum class TheaterTab(val label: String) {
 }
 
 class GameViewModel(
-    private val repository: CampaignRepository,
+    private val repository: CampaignRepository?,
     initialCampaign: CampaignState
 ) : ViewModel() {
 
@@ -430,11 +430,18 @@ class GameViewModel(
     }
 
     fun saveCampaignToCloud(silent: Boolean = false) {
+        val repo = repository
+        if (repo == null) {
+            if (!silent) {
+                _toastMessage.value = "Offline mode: Sign in with Google to save to cloud."
+            }
+            return
+        }
         val current = _campaign.value
         if (current.campaignId.isBlank()) return
         viewModelScope.launch {
             _isSaving.value = true
-            val result = repository.saveCampaign(current)
+            val result = repo.saveCampaign(current)
             _isSaving.value = false
             if (!silent) {
                 result.onSuccess {

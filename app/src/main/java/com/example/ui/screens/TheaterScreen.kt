@@ -216,7 +216,7 @@ fun TheaterScreen(
             text = {
                 Text(
                     text = if (isVictory) {
-                        "Your armies have established continental supremacy across Europe. The campaign record has been archived in Cloud Command."
+                        "Your armies have established global supremacy across the world theater. The campaign record has been archived in Cloud Command."
                     } else {
                         "Your capital and strategic heartland have fallen. High Command has surrendered."
                     },

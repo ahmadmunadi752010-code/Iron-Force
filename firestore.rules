@@ -56,16 +56,16 @@ service cloud.firestore {
              data.activeResearchProgressDays is int && data.activeResearchProgressDays >= 0 && data.activeResearchProgressDays <= 500 &&
              data.unlockedTechIds is list && data.unlockedTechIds.size() <= 100 &&
              (data.unlockedTechIds.size() == 0 || data.unlockedTechIds[0] is string) &&
-             data.provinceOwners is map && data.provinceOwners.size() <= 60 &&
-             data.provinceCivFactories is map && data.provinceCivFactories.size() <= 60 &&
-             data.provinceMilFactories is map && data.provinceMilFactories.size() <= 60 &&
-             data.provinceForts is map && data.provinceForts.size() <= 60 &&
-             data.provinceInfra is map && data.provinceInfra.size() <= 60 &&
+             data.provinceOwners is map && data.provinceOwners.size() <= 90 &&
+             data.provinceCivFactories is map && data.provinceCivFactories.size() <= 90 &&
+             data.provinceMilFactories is map && data.provinceMilFactories.size() <= 90 &&
+             data.provinceForts is map && data.provinceForts.size() <= 90 &&
+             data.provinceInfra is map && data.provinceInfra.size() <= 90 &&
              data.equipmentStockpile is map && data.equipmentStockpile.size() <= 20 &&
-             data.diplomacyStates is map && data.diplomacyStates.size() <= 20 &&
-             data.nationRelations is map && data.nationRelations.size() <= 20 &&
-             data.warGoalProgress is map && data.warGoalProgress.size() <= 20 &&
-             data.divisionsData is list && data.divisionsData.size() <= 150 &&
+             data.diplomacyStates is map && data.diplomacyStates.size() <= 25 &&
+             data.nationRelations is map && data.nationRelations.size() <= 25 &&
+             data.warGoalProgress is map && data.warGoalProgress.size() <= 25 &&
+             data.divisionsData is list && data.divisionsData.size() <= 200 &&
              data.productionLinesData is list && data.productionLinesData.size() <= 20 &&
              data.constructionQueueData is list && data.constructionQueueData.size() <= 30 &&
              data.trainingQueueData is list && data.trainingQueueData.size() <= 20 &&

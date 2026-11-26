@@ -221,3 +221,58 @@ test("Out-of-bounds values and future timestamps are rejected", async () => {
     )
   );
 });
+
+test("Full 70-province global world map campaign payload is accepted", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const owners = {};
+  const civs = {};
+  const mils = {};
+  const forts = {};
+  const infra = {};
+  for (let i = 0; i < 70; i++) {
+    const id = `prov_${i}`;
+    owners[id] = i % 2 === 0 ? "GER" : "USA";
+    civs[id] = 3;
+    mils[id] = 2;
+    forts[id] = 1;
+    infra[id] = 6;
+  }
+  const diplomacy = {};
+  const relations = {};
+  for (let i = 0; i < 14; i++) {
+    const nId = `NAT_${i}`;
+    diplomacy[nId] = "PEACE";
+    relations[nId] = 10;
+  }
+  const divisions = [];
+  for (let i = 0; i < 120; i++) {
+    divisions.push({
+      id: `div_${i}`,
+      name: `${i}. Division`,
+      nationId: i % 2 === 0 ? "GER" : "USA",
+      templateId: "INFANTRY",
+      provinceId: `prov_${i % 70}`,
+      targetProvinceId: "",
+      moveProgress: 0.0,
+      hp: 100.0,
+      org: 60.0,
+      entrenchment: 5.0,
+    });
+  }
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("campaigns").doc("world_1936").set(
+      buildValidCampaign(ALICE_UID, {
+        provinceOwners: owners,
+        provinceCivFactories: civs,
+        provinceMilFactories: mils,
+        provinceForts: forts,
+        provinceInfra: infra,
+        diplomacyStates: diplomacy,
+        nationRelations: relations,
+        divisionsData: divisions,
+      })
+    )
+  );
+});
+

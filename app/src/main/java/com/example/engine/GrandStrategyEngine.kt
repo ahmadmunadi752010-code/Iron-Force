@@ -609,10 +609,10 @@ object GrandStrategyEngine {
             }
         }
 
-        // Scripted historical escalation flavor if world tension is still low after 1938
+        // Scripted historical escalation flavor if world tension is still low
         if (dayIndex == 60 && worldTension < 0.25) {
             worldTension = (worldTension + 0.08).coerceAtMost(1.0)
-            news.add(0, "${formatShortDate(state.gameDateEpochDay)} — Rhineland Crisis raises European tensions.")
+            news.add(0, "${formatShortDate(state.gameDateEpochDay)} — Global rearmament crises raise World Tension.")
         }
 
         return state.copy(
@@ -666,10 +666,10 @@ object GrandStrategyEngine {
                 newsLog = listOf("${formatShortDate(state.gameDateEpochDay)} — Our capital has fallen. High Command surrenders.") + state.newsLog
             )
         }
-        if (playerProvs >= (totalProvs * 0.65).roundToInt()) {
+        if (playerProvs >= (totalProvs * 0.55).roundToInt()) {
             return state.copy(
                 status = "victory",
-                newsLog = listOf("${formatShortDate(state.gameDateEpochDay)} — Total Hegemony Achieved! Europe bows to our command.") + state.newsLog
+                newsLog = listOf("${formatShortDate(state.gameDateEpochDay)} — Global Hegemony Achieved! The world bows to our command.") + state.newsLog
             )
         }
         return state

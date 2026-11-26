@@ -2,6 +2,7 @@ package com.example.data
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -30,6 +31,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -43,6 +45,12 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+
+tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 fun attemptAutoSignIn(
     context: Context,
@@ -93,6 +101,11 @@ fun onGoogleSignInClicked(
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {}
 ) {
+    val activity = context.findActivity()
+    if (activity == null) {
+        onAuthError("Unable to locate host Activity for Google Sign-In.")
+        return
+    }
     val clientId = try {
         context.getString(R.string.default_web_client_id)
     } catch (_: Exception) {
@@ -105,7 +118,7 @@ fun onGoogleSignInClicked(
         .build()
     scope.launch {
         try {
-            val cred = credentialManager.getCredential(context as Activity, request).credential
+            val cred = credentialManager.getCredential(activity, request).credential
             if (cred is CustomCredential && cred.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val token = GoogleIdTokenCredential.createFrom(cred.data).idToken
                 Firebase.auth.signInWithCredential(GoogleAuthProvider.getCredential(token, null)).await()
@@ -116,6 +129,10 @@ fun onGoogleSignInClicked(
         } catch (e: GetCredentialCancellationException) {
             Log.w("Auth", "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
             onAuthCancelled()
+            onAuthError("Sign-in cancelled. Pastikan akun Google aktif di perangkat/emulator, atau gunakan Play Offline.")
+        } catch (e: NoCredentialException) {
+            Log.w("Auth", "No Google credential available on device: ${e.message}", e)
+            onAuthError("Tidak ada akun Google di emulator ini. Silakan login Google di Settings atau klik Play Offline.")
         } catch (e: Exception) {
             Log.e("Auth", "Google Sign-In failed", e)
             onAuthError(e.localizedMessage ?: "Sign in failed")

@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppContent() {
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
+    var offlineCampaign by remember { mutableStateOf<CampaignState?>(null) }
     val context = LocalContext.current
 
     DisposableEffect(Unit) {
@@ -63,14 +64,40 @@ fun AppContent() {
     }
 
     val user = currentUser
-    if (user == null) {
-        AuthScreen(onAuthSuccess = { currentUser = Firebase.auth.currentUser })
-    } else {
-        key(user.uid) {
-            AuthenticatedTheaterRoot(
-                currentUserId = user.uid,
-                displayName = user.displayName,
-                onSignedOut = { currentUser = null }
+    val localGame = offlineCampaign
+    when {
+        user != null -> {
+            key(user.uid) {
+                AuthenticatedTheaterRoot(
+                    currentUserId = user.uid,
+                    displayName = user.displayName,
+                    onSignedOut = { currentUser = null }
+                )
+            }
+        }
+        localGame != null -> {
+            key("offline_${localGame.playerNationId}_${localGame.campaignName}") {
+                val offlineVm: GameViewModel = viewModel(
+                    key = "offline_${localGame.playerNationId}_${localGame.campaignName}",
+                    factory = viewModelFactory {
+                        initializer {
+                            GameViewModel(
+                                repository = null,
+                                initialCampaign = localGame
+                            )
+                        }
+                    }
+                )
+                TheaterScreen(
+                    viewModel = offlineVm,
+                    onExitToHub = { offlineCampaign = null }
+                )
+            }
+        }
+        else -> {
+            AuthScreen(
+                onAuthSuccess = { currentUser = Firebase.auth.currentUser },
+                onPlayOffline = { state -> offlineCampaign = state }
             )
         }
     }

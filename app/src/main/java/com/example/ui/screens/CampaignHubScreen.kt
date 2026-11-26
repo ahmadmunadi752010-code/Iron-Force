@@ -200,7 +200,7 @@ fun CampaignHubScreen(
                 ) {
                     Column(modifier = Modifier.align(Alignment.CenterStart)) {
                         Text(
-                            text = "EUROPEAN THEATER 1936",
+                            text = "GLOBAL WORLD THEATER 1936",
                             style = MaterialTheme.typography.labelMedium,
                             color = BrassGold
                         )
@@ -211,7 +211,7 @@ fun CampaignHubScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "40 Provinces • 8 Playable Nations • Cloud Synced",
+                            text = "70 World Provinces • 14 Playable Nations • Cloud Synced",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -313,7 +313,7 @@ private fun EmptyCampaignsCard(onStartNew: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Choose one of 8 European powers in the 1936 scenario to begin conquering, industrializing, and forging alliances.",
+                text = "Choose one of 14 global powers across the 1936 World Map to begin conquering, industrializing, and forging alliances.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
